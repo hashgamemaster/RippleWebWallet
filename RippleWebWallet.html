@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ripple Web Client</title>
+  <!-- <script src="https://unpkg.com/xrpl@4.0.0/build/xrpl-latest-min.js"></script> -->
+  <script src="./xrpl-latest-min.js"></script>
+  <style>
+    #LogDiv {
+      border: 2px solid #ccc;
+      padding: 5px;
+      margin-top: 10px;
+      height: 500px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      word-break: break-all;
+    }
+  </style>
+</head>
+
+<body>
+  <button id="connectButton">Connect to Ripple Server</button>
+  <hr />
+
+  <label for="PayAccountSeed">Pay Account Seed:</label>
+  <input type="text" id="PayAccountSeed" placeholder="s........" size="50" disabled>
+  <br />
+  <label for="PayAccountAddress">Pay Account Address:</label>
+  <input type="text" id="PayAccountAddress" placeholder="r........" size="50" disabled>
+  <br />
+  <label for="GetAccountAddress">Get Account Address:</label>
+  <input type="text" id="GetAccountAddress" placeholder="r........" size="50" disabled>
+  <br />
+  <label for="PayAmount">Pay Amount:</label>
+  <input type="number" id="PayAmount" placeholder="100..." disabled>
+  <br />
+  <label for="SourceTag">SourceTag:</label>
+  <input type="number" id="SourceTag" placeholder="" disabled>
+  <br />
+  <label for="DestinationTag">DestinationTag:</label>
+  <input type="number" id="DestinationTag" placeholder="" disabled>
+  <br />
+  <button id="PayButton" disabled>Pay XRP</button>
+  <br />
+  <br />
+  <div id="LogDiv"></div>
+
+  <script>
+    // const client = new xrpl.Client('wss://s.altnet.rippletest.net:51233/')
+    const client = new xrpl.Client('wss://s1.ripple.com')
+    let payWallet = null
+
+    function printLog(log) {
+      const LogDiv = document.getElementById('LogDiv')
+      const newLogEntry = document.createElement('p')
+      newLogEntry.innerHTML = log
+      LogDiv.appendChild(newLogEntry)
+      document.getElementById('LogDiv').scroll({
+        top: document.getElementById('LogDiv').scrollHeight,
+        behavior: 'smooth'
+      })
+    }
+
+    function linkTx(tx_hash) {
+      return `<a href='https://xrpscan.com/tx/${tx_hash}' target="_blank">${tx_hash}</a>`
+    }
+
+    function linkAddress(address) {
+      return `<a href='https://xrpscan.com/account/${address}' target="_blank">${address}</a>`
+    }
+
+    document.getElementById('connectButton').addEventListener('click', async () => {
+      try {
+        printLog('Connecting Ripple Server...')
+        await client.connect()
+
+        client.on('connected', () => {
+          printLog('Connected Ripple Server!')
+
+          document.getElementById('PayAccountSeed').disabled = false
+          document.getElementById('GetAccountAddress').disabled = false
+          document.getElementById('PayAmount').disabled = false
+          document.getElementById('PayButton').disabled = false
+          document.getElementById('SourceTag').disabled = false
+          document.getElementById('DestinationTag').disabled = false
+        })
+
+        client.on('disconnected', () => {
+          printLog('Disconnected Ripple Server...')
+
+          document.getElementById('PayAccountSeed').disabled = true
+          document.getElementById('GetAccountAddress').disabled = true
+          document.getElementById('PayAmount').disabled = true
+          document.getElementById('PayButton').disabled = true
+          document.getElementById('SourceTag').disabled = true
+          document.getElementById('DestinationTag').disabled = true
+        })
+
+        client.on('reconnecting', () => {
+          printLog('Reconnecting Ripple Server...')
+        })
+
+        await client.connect()
+      } catch (error) {
+        printLog(error.message)
+      }
+    })
+
+    document.getElementById('PayButton').addEventListener('click', async () => {
+      try {
+        let payAmount = parseFloat(document.getElementById('PayAmount').value)
+        document.getElementById('PayAmount').value = 0
+
+        let getAccountAddress = document.getElementById('GetAccountAddress').value
+
+        if (payWallet == null) {
+          printLog(`PayAccount is null...`)
+          return
+        }
+        if (getAccountAddress == null || getAccountAddress == '') {
+          printLog(`GetAccount is null...`)
+          return
+        }
+        if (payAmount <= 0) {
+          printLog(`PayAmount should larger than 0...`)
+          return
+        }
+
+        await payXRP(getAccountAddress, payAmount)
+      } catch (error) {
+        printLog(`Transaction error: ${error.message}`)
+      }
+    })
+
+    async function getAccountBalance(address) {
+      try {
+        const response = await client.request({
+          command: 'account_info',
+          account: address,
+          ledger_index: 'validated'
+        })
+        const balance = response.result.account_data.Balance
+        printLog(`${linkAddress(address)} balance: ${xrpl.dropsToXrp(balance)} XRP`)
+        return balance
+      } catch (error) {
+        throw error
+      }
+    }
+
+    async function payXRP(destination, amount) {
+      try {
+        document.getElementById('PayButton').disabled = true
+        let source_tag = parseInt(document.getElementById('SourceTag').value)
+        let destination_tag = parseInt(document.getElementById('DestinationTag').value)
+
+        const transaction = {
+          TransactionType: 'Payment',
+          Account: payWallet.address,
+          Destination: destination,
+          Amount: xrpl.xrpToDrops(amount)
+        }
+        if (source_tag != NaN) {
+          transaction.SourceTag = source_tag
+        }
+        if (destination_tag != NaN) {
+          transaction.DestinationTag = destination_tag
+        }
+        const prepared = await client.autofill(transaction)
+        const signed = payWallet.sign(prepared)
+        const response = await client.submitAndWait(signed.tx_blob)
+        if (response.result.validated == true && response.result.meta.TransactionResult == 'tesSUCCESS') {
+          printLog(`Paymet(${linkTx(response.result.hash)}) success`)
+          printLog(`${linkAddress(response.result.Account)} deliver amount(${xrpl.dropsToXrp(response.result.Amount)} XRP) to ${linkAddress(response.result.Destination)} cost fee(${xrpl.dropsToXrp(response.result.Fee)} XRP)`)
+        } else {
+          printLog(`Paymet(${linkTx(response.result.hash)}) may failed(${response.result.meta.TransactionResult}), please check manually...`)
+        }
+        printLog('Transaction result: ' + JSON.stringify(response))
+        document.getElementById('PayButton').disabled = false
+        return response
+      } catch (error) {
+        throw error
+      }
+    }
+
+    const GetAccountAddressInput = document.getElementById('GetAccountAddress')
+    GetAccountAddressInput.addEventListener('input', function () {
+      const address = this.value
+      if (address != '') {
+        getAccountBalance(address)
+      }
+    })
+
+    const PayAccountSeedInput = document.getElementById('PayAccountSeed')
+    PayAccountSeedInput.addEventListener('input', function () {
+      const seed = this.value
+      try {
+        payWallet = xrpl.Wallet.fromSeed(seed)
+        if (seed != '' && payWallet.address != '') {
+          getAccountBalance(payWallet.address)
+          document.getElementById('PayAccountAddress').value = payWallet.address
+        } else {
+          document.getElementById('PayAccountAddress').value = ''
+        }
+      } catch (error) {
+        printLog(error.message)
+        payWallet = null
+        document.getElementById('PayAccountAddress').value = ''
+      }
+    })
+  </script>
+</body>
+
+</html>
