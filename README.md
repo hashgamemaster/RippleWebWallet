@@ -1,5 +1,11 @@
-# Ripple Web Wallet
+# A simple local web ripple wallet
 
-## A simple local web ripple wallet
-1. Get account xrp balance
-2. Send xrp with optional source_tag and destination_tag
+## Function
+1. Generate ripple account address and seed.
+2. Connect to ripple mainnet or testnet
+3. Get account XRP balance.
+4. Send XRP with optional source_tag and destination_tag.
+
+## Running(standalone)
+1. Download RippleWebWallet.html and xrpl-latest-min.js.
+2. Open RippleWebWallet.html with browse, that's all.
