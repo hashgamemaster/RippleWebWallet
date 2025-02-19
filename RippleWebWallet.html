@@ -24,13 +24,13 @@
   <button id="GenAccountButton">Generate an Account</button>
   <hr />
 
-  <label for="MainCluster">MainCluster: wss://xrplcluster.com</label><br />
+  <label for="MainNetCluster">MainNetCluster: wss://xrplcluster.com</label><br />
   <label for="MainNet">MainNet: wss://s1.ripple.com</label><br />
   <label for="TestNet">TestNet: wss://s.altnet.rippletest.net:51233</label><br /><br />
   <label for="ServerURL">Server URL:</label>
   <input type="text" id="ServerURL" placeholder="s........" size="50" value="wss://s.altnet.rippletest.net:51233">
   <br />
-  <button id="ConnectButton">Connect to Ripple Server</button>
+  <button id="SetServerURL">Set Server URL</button>
   <hr />
 
   <label for="PayAccountSeed">Pay Account Seed:</label>
@@ -57,7 +57,8 @@
   <div id="LogDiv"></div>
 
   <script>
-    let client
+    let isConnected = false
+    let client = null
     let payWallet = null
 
     function printLog(log) {
@@ -84,15 +85,31 @@
       printLog(`Account address: ${wallet.address}<br />Secret key     : ${wallet.seed}`)
     })
 
-    document.getElementById('ConnectButton').addEventListener('click', async () => {
+    function reconnect() {
+      if (client != null && !isConnected) {
+        const date = new Date()
+        printLog(`@${date.toLocaleString()} Connecting to ${document.getElementById('ServerURL').value} ...`)
+        client.connect()
+      }
+    }
+
+    setInterval(() => {
+      reconnect()
+    }, 3 * 1000)
+
+    document.getElementById('SetServerURL').addEventListener('click', async () => {
       try {
-        printLog('Connecting Ripple Server...')
+        if (client != null) {
+          console.log(client)
+          await client.disconnect()
+        }
         client = new xrpl.Client(document.getElementById('ServerURL').value)
-        await client.connect()
+        isConnected = false
 
         client.on('connected', () => {
-          printLog('Connected Ripple Server!')
-
+          const date = new Date()
+          printLog(`@${date.toLocaleString()} Connected to ${document.getElementById('ServerURL').value}`)
+          isConnected = true
           document.getElementById('PayAccountSeed').disabled = false
           document.getElementById('GetAccountAddress').disabled = false
           document.getElementById('PayAmount').disabled = false
@@ -102,7 +119,9 @@
         })
 
         client.on('disconnected', () => {
-          printLog('Disconnected Ripple Server...')
+          const date = new Date()
+          printLog(`@${date.toLocaleString()} Disconnected... `)
+          isConnected = false
 
           document.getElementById('PayAccountSeed').disabled = true
           document.getElementById('GetAccountAddress').disabled = true
@@ -112,13 +131,14 @@
           document.getElementById('DestinationTag').disabled = true
         })
 
-        client.on('reconnecting', () => {
-          printLog('Reconnecting Ripple Server...')
+        client.on("close", () => {
+          const date = new Date()
+          printLog(`@${date.toLocaleString()} Connection closed...`)
+          isConnected = false
         })
-
-        await client.connect()
       } catch (error) {
         printLog(error.message)
+        isConnected = false
       }
     })
 
@@ -188,7 +208,8 @@
           printLog(`Paymet(${linkTx(response.result.hash)}) success`)
           printLog(`${linkAddress(response.result.Account)} deliver amount(${xrpl.dropsToXrp(response.result.Amount)} XRP) to ${linkAddress(response.result.Destination)} cost fee(${xrpl.dropsToXrp(response.result.Fee)} XRP)`)
         } else {
-          printLog(`Paymet(${linkTx(response.result.hash)}) may failed(${response.result.meta.TransactionResult}), please check manually...`)
+          printLog(`Paymet(${linkTx(response.result.hash)
+            }) may failed(${response.result.meta.TransactionResult}), please check manually...`)
         }
         printLog('Transaction result: ' + JSON.stringify(response))
         document.getElementById('PayButton').disabled = false
