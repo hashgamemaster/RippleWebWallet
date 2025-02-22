@@ -9,3 +9,6 @@
 ## Running(standalone)
 1. Download RippleWebWallet.html and xrpl-latest-min.js.
 2. Open RippleWebWallet.html with browse, that's all.
+
+## Donate
+- Ripple: rGAME18vAXhnJaDhHREWBAi77iAzQmxPkG
