@@ -201,20 +201,14 @@
           Fee: '12',
           Amount: xrpl.xrpToDrops(amount)
         }
-        printLog(JSON.stringify(transaction))
         if (source_tag != NaN) {
           transaction.SourceTag = source_tag
         }
         if (destination_tag != NaN) {
           transaction.DestinationTag = destination_tag
         }
-        printLog(JSON.stringify(transaction))
         const prepared = await client.autofill(transaction)
-        printLog(JSON.stringify(prepared))
         const signed = payWallet.sign(prepared)
-        printLog(JSON.stringify(signed))
-        const tx_hash = xrpl.computeBinaryTransactionHash(signed.tx_blob)
-        printLog(tx_hash)
         const response = await client.submitAndWait(signed.tx_blob)
         if (response.result.validated == true && response.result.meta.TransactionResult == 'tesSUCCESS') {
           printLog(`Paymet(${linkTx(response.result.hash)}) success`)
