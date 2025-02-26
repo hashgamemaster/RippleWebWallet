@@ -24,14 +24,15 @@
   <button id="GenAccountButton">Generate an Account</button>
   <hr />
 
-  <label for="MainNetCluster">MainNetCluster: wss://xrplcluster.com</label><br />
-  <label for="MainNet">MainNet: wss://s1.ripple.com</label><br />
-  <label for="TestNet">TestNet: wss://s.altnet.rippletest.net:51233</label><br /><br />
-  <label for="ServerURL">Server URL:</label>
-  <input type="text" id="ServerURL" placeholder="s........" size="50" value="wss://s.altnet.rippletest.net:51233">
+  <label for="Server">Server:</label>
+  <select id="ServerURL">
+    <option value="wss://xrplcluster.com">MainNetCluster</option>
+    <option value="wss://s1.ripple.com">MainNet s1</option>
+    <option value="wss://s2.ripple.com">MainNet s2</option>
+    <option value="wss://s.altnet.rippletest.net:51233" selected>TestNet</option>
+  </select>
+  <button id="ConnectServer">Connect</button>
   <br />
-  <button id="SetServerURL">Set Server URL</button>
-  <hr />
 
   <label for="PayAccountSeed">Pay Account Seed:</label>
   <input type="text" id="PayAccountSeed" placeholder="s........" size="50" disabled>
@@ -57,6 +58,9 @@
   <button id="CleanLog">Clean Log</button>
   <div id="LogDiv"></div>
 
+  <br />
+  <label for="Donate">Donate: rGAME18vAXhnJaDhHREWBAi77iAzQmxPkG</label>
+  
   <script>
     let isConnected = false
     let client = null
@@ -102,7 +106,7 @@
       reconnect()
     }, 3 * 1000)
 
-    document.getElementById('SetServerURL').addEventListener('click', async () => {
+    document.getElementById('ConnectServer').addEventListener('click', async () => {
       try {
         if (client != null) {
           console.log(client)
