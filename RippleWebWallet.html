@@ -17,11 +17,15 @@
       overflow-x: hidden;
       word-break: break-all;
     }
+
+    .hidden {
+      display: none;
+    }
   </style>
 </head>
 
 <body>
-  <button id="GenAccountButton">Generate an Account</button>
+  <label for="Donate" style="font-weight: bold;">Donate: rGAME18vAXhnJaDhHREWBAi77iAzQmxPkG</label>
   <hr />
 
   <label for="Server">Server:</label>
@@ -33,38 +37,104 @@
   </select>
   <button id="ConnectServer">Connect</button>
   <br />
+  <label for="Action">Action:</label>
+  <select id="ActionSelector">
+    <option value="" selected>Please select action...</option>
+    <option value="ActionGenAccount">GenAccount</option>
+    <option value="ActionAccountInfo">Account Info</option>
+    <option value="ActionPayment">Payment</option>
+    <option value="ActionAccountDel">Delete Account</option>
+  </select>
+  <br />
 
-  <label for="PayAccountSeed">Pay Account Seed:</label>
-  <input type="text" id="PayAccountSeed" placeholder="s........" size="50" disabled>
-  <br />
-  <label for="PayAccountAddress">Pay Account Address:</label>
-  <input type="text" id="PayAccountAddress" placeholder="r........" size="50" disabled>
-  <br />
-  <label for="GetAccountAddress">Get Account Address:</label>
-  <input type="text" id="GetAccountAddress" placeholder="r........" size="50" disabled>
-  <br />
-  <label for="PayAmount">Pay Amount:</label>
-  <input type="number" id="PayAmount" placeholder="100..." disabled>
-  <br />
-  <label for="SourceTag">SourceTag:</label>
-  <input type="number" id="SourceTag" placeholder="" disabled>
-  <br />
-  <label for="DestinationTag">DestinationTag:</label>
-  <input type="number" id="DestinationTag" placeholder="" disabled>
-  <br />
-  <button id="PayButton" disabled>Pay XRP</button>
-  <br />
+  <div id="ActionGenAccount" class="hidden">
+    <button id="GenAccountButton">Generate an Account</button>
+  </div>
+
+  <div id="ActionAccountInfo" class="hidden">
+    <label for="AccountInfo">Account:</label>
+    <input type="text" id="AccountInfo" placeholder="r........" size="50" disabled>
+    <br />
+  </div>
+
+  <div id="ActionPayment" class="hidden">
+    <label for="PayAccountSeed">Pay Account Seed:</label>
+    <input type="text" id="PayAccountSeed" placeholder="s........" size="50" disabled>
+    <br />
+    <label for="PayAccountAddress">Pay Account Address:</label>
+    <input type="text" id="PayAccountAddress" placeholder="r........" size="50" disabled>
+    <br />
+    <label for="GetAccountAddress">Get Account Address:</label>
+    <input type="text" id="GetAccountAddress" placeholder="r........" size="50" disabled>
+    <br />
+    <label for="PayAmount">Pay Amount:</label>
+    <input type="number" id="PayAmount" placeholder="100..." disabled>
+    <br />
+    <label for="SourceTag">SourceTag:</label>
+    <input type="number" id="SourceTag" placeholder="" disabled>
+    <br />
+    <label for="DestinationTag">DestinationTag:</label>
+    <input type="number" id="DestinationTag" placeholder="" disabled>
+    <br />
+    <button id="PayButton" disabled>Pay XRP</button>
+  </div>
+
+  <div id="ActionAccountDel" class="hidden">
+    <label for="DelAccountSeed">Delete Account Seed:</label>
+    <input type="text" id="DelAccountSeed" placeholder="s........" size="50" disabled>
+    <br />
+    <label for="DelAccountAddress">Delete Account Address:</label>
+    <input type="text" id="DelAccountAddress" placeholder="r........" size="50" disabled>
+    <br />
+    <label for="DestAccountAddress">Destination Account Address:</label>
+    <input type="text" id="DestAccountAddress" placeholder="r........" size="50" disabled>
+    <br />
+    <label for="SourceTag">SourceTag:</label>
+    <input type="number" id="DelSourceTag" placeholder="" disabled>
+    <br />
+    <label for="DestinationTag">DestinationTag:</label>
+    <input type="number" id="DelDestinationTag" placeholder="" disabled>
+    <br />
+    <button id="DelButton" disabled>!!!Delete</button>
+  </div>
+
+
   <br />
   <button id="CleanLog">Clean Log</button>
   <div id="LogDiv"></div>
 
-  <br />
-  <label for="Donate">Donate: rGAME18vAXhnJaDhHREWBAi77iAzQmxPkG</label>
-  
   <script>
     let isConnected = false
     let client = null
     let payWallet = null
+    let delWallet = null
+
+    let ActionDivs = [
+      document.getElementById('ActionGenAccount'),
+      document.getElementById('ActionAccountInfo'),
+      document.getElementById('ActionPayment'),
+      document.getElementById('ActionAccountDel'),
+    ]
+
+    let ActionSelector = document.getElementById('ActionSelector')
+    ActionSelector.addEventListener('change', async () => {
+      for (let i = 0; i < ActionDivs.length; i++) {
+        const div = ActionDivs[i]
+        if (div.id == ActionSelector.value) {
+          div.style.display = 'block'
+        } else {
+          div.style.display = 'none'
+        }
+      }
+    })
+
+    const AccountInfoInput = document.getElementById('AccountInfo')
+    AccountInfoInput.addEventListener('input', function () {
+      const address = this.value
+      if (address != '') {
+        getAccountInfo(address)
+      }
+    })
 
     function printLog(log) {
       const LogDiv = document.getElementById('LogDiv')
@@ -78,11 +148,19 @@
     }
 
     function linkTx(tx_hash) {
-      return `<a href='https://xrpscan.com/tx/${tx_hash}' target="_blank">${tx_hash}</a>`
+      if (document.getElementById('ServerURL').value == "wss://s.altnet.rippletest.net:51233") {
+        return `<a href='https://testnet.xrpl.org/transactions/${tx_hash}' target="_blank">${tx_hash}</a>`
+      } else {
+        return `<a href='https://xrpscan.com/tx/${tx_hash}' target="_blank">${tx_hash}</a>`
+      }
     }
 
     function linkAddress(address) {
-      return `<a href='https://xrpscan.com/account/${address}' target="_blank">${address}</a>`
+      if (document.getElementById('ServerURL').value == "wss://s.altnet.rippletest.net:51233") {
+        return `<a href='https://testnet.xrpl.org/accounts/${address}' target="_blank">${address}</a>`
+      } else {
+        return `<a href='https://xrpscan.com/account/${address}' target="_blank">${address}</a>`
+      }
     }
 
     document.getElementById('GenAccountButton').addEventListener('click', async () => {
@@ -119,12 +197,21 @@
           const date = new Date()
           printLog(`@${date.toLocaleString()} Connected to ${document.getElementById('ServerURL').value}`)
           isConnected = true
+
+          document.getElementById('AccountInfo').disabled = false
+
           document.getElementById('PayAccountSeed').disabled = false
           document.getElementById('GetAccountAddress').disabled = false
           document.getElementById('PayAmount').disabled = false
-          document.getElementById('PayButton').disabled = false
           document.getElementById('SourceTag').disabled = false
           document.getElementById('DestinationTag').disabled = false
+          document.getElementById('PayButton').disabled = false
+
+          document.getElementById('DelAccountSeed').disabled = false
+          document.getElementById('DestAccountAddress').disabled = false
+          document.getElementById('DelSourceTag').disabled = false
+          document.getElementById('DelDestinationTag').disabled = false
+          document.getElementById('DelButton').disabled = false
         })
 
         client.on('disconnected', () => {
@@ -132,12 +219,20 @@
           printLog(`@${date.toLocaleString()} Disconnected... `)
           isConnected = false
 
+          document.getElementById('AccountInfo').disabled = true
+
           document.getElementById('PayAccountSeed').disabled = true
           document.getElementById('GetAccountAddress').disabled = true
           document.getElementById('PayAmount').disabled = true
-          document.getElementById('PayButton').disabled = true
           document.getElementById('SourceTag').disabled = true
           document.getElementById('DestinationTag').disabled = true
+          document.getElementById('PayButton').disabled = true
+
+          document.getElementById('DelAccountSeed').disabled = true
+          document.getElementById('DestAccountAddress').disabled = true
+          document.getElementById('DelSourceTag').disabled = true
+          document.getElementById('DelDestinationTag').disabled = true
+          document.getElementById('DelButton').disabled = true
         })
 
         client.on("close", () => {
@@ -177,6 +272,19 @@
       }
     })
 
+    async function getAccountInfo(address) {
+      try {
+        const response = await client.request({
+          command: 'account_info',
+          account: address,
+          ledger_index: 'validated'
+        })
+        printLog(JSON.stringify(response.result))
+      } catch (error) {
+        printLog(`AccountInfo error: ${error.message}`)
+      }
+    }
+
     async function getAccountBalance(address) {
       try {
         const response = await client.request({
@@ -188,7 +296,7 @@
         printLog(`${linkAddress(address)} balance: ${xrpl.dropsToXrp(balance)} XRP`)
         return balance
       } catch (error) {
-        throw error
+        printLog(`AccountInfo error: ${error.message}`)
       }
     }
 
@@ -233,7 +341,7 @@
     GetAccountAddressInput.addEventListener('input', function () {
       const address = this.value
       if (address != '') {
-        getAccountBalance(address)
+        getAccountInfo(address)
       }
     })
 
@@ -252,6 +360,75 @@
         printLog(error.message)
         payWallet = null
         document.getElementById('PayAccountAddress').value = ''
+      }
+    })
+
+    const DelAccountSeedInput = document.getElementById('DelAccountSeed')
+    DelAccountSeedInput.addEventListener('input', function () {
+      const seed = this.value
+      try {
+        delWallet = xrpl.Wallet.fromSeed(seed)
+        if (seed != '' && delWallet.address != '') {
+          getAccountBalance(delWallet.address)
+          document.getElementById('DelAccountAddress').value = delWallet.address
+        } else {
+          document.getElementById('DelAccountAddress').value = ''
+        }
+      } catch (error) {
+        printLog(error.message)
+        payWallet = null
+        document.getElementById('DelAccountAddress').value = ''
+      }
+    })
+
+    const DestAccountAddressInput = document.getElementById('DestAccountAddress')
+    DestAccountAddressInput.addEventListener('input', function () {
+      const address = this.value
+      if (address != '') {
+        getAccountBalance(address)
+      }
+    })
+
+    document.getElementById('DelButton').addEventListener('click', async () => {
+      try {
+        let destAccountAddress = document.getElementById('DestAccountAddress').value
+        let source_tag = parseInt(document.getElementById('DelSourceTag').value)
+        let destination_tag = parseInt(document.getElementById('DelDestinationTag').value)
+
+        if (delWallet == null) {
+          printLog(`DelAccount is null...`)
+          return
+        }
+        if (destAccountAddress == null || destAccountAddress == '') {
+          printLog(`destAccount is null...`)
+          return
+        }
+
+        document.getElementById('DelButton').disabled = true
+
+        const transaction = {
+          TransactionType: 'AccountDelete',
+          Account: delWallet.address,
+          Destination: destAccountAddress
+        }
+        if (source_tag != NaN) {
+          transaction.SourceTag = source_tag
+        }
+        if (destination_tag != NaN) {
+          transaction.DestinationTag = destination_tag
+        }
+        const prepared = await client.autofill(transaction)
+        const signed = delWallet.sign(prepared)
+        const response = await client.submitAndWait(signed.tx_blob)
+        if (response.result.validated == true && response.result.meta.TransactionResult == 'tesSUCCESS') {
+          printLog(`Delete (${linkTx(response.result.hash)}) success`)
+        } else {
+          printLog(`Delete may failed(${response.result.meta.TransactionResult}), please check manually...`)
+        }
+        printLog('Transaction result: ' + JSON.stringify(response))
+        document.getElementById('DelButton').disabled = false
+      } catch (error) {
+        printLog(`Transaction error: ${error.message}`)
       }
     })
   </script>
