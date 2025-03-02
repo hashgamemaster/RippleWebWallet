@@ -128,14 +128,6 @@
       }
     })
 
-    const AccountInfoInput = document.getElementById('AccountInfo')
-    AccountInfoInput.addEventListener('input', function () {
-      const address = this.value
-      if (address != '') {
-        getAccountInfo(address)
-      }
-    })
-
     function printLog(log) {
       const LogDiv = document.getElementById('LogDiv')
       const newLogEntry = document.createElement('p')
@@ -146,6 +138,11 @@
         behavior: 'smooth'
       })
     }
+
+    document.getElementById('CleanLog').addEventListener('click', async () => {
+      const divElement = document.getElementById('LogDiv')
+      divElement.innerHTML = ''
+    })
 
     function linkTx(tx_hash) {
       if (document.getElementById('ServerURL').value == "wss://s.altnet.rippletest.net:51233") {
@@ -162,15 +159,6 @@
         return `<a href='https://xrpscan.com/account/${address}' target="_blank">${address}</a>`
       }
     }
-
-    document.getElementById('GenAccountButton').addEventListener('click', async () => {
-      const wallet = xrpl.Wallet.generate()
-      printLog(`Account address: ${wallet.address}<br />Secret key     : ${wallet.seed}`)
-    })
-    document.getElementById('CleanLog').addEventListener('click', async () => {
-      const divElement = document.getElementById('LogDiv')
-      divElement.innerHTML = ''
-    })
 
     function reconnect() {
       if (client != null && !isConnected) {
@@ -246,6 +234,50 @@
       }
     })
 
+    async function getAccountBalance(address) {
+      try {
+        const response = await client.request({
+          command: 'account_info',
+          account: address,
+          ledger_index: 'validated'
+        })
+        const balance = response.result.account_data.Balance
+        printLog(`${linkAddress(address)} balance: ${xrpl.dropsToXrp(balance)} XRP`)
+        return balance
+      } catch (error) {
+        printLog(`AccountInfo error: ${error.message}`)
+      }
+    }
+
+    // GenAccount
+    document.getElementById('GenAccountButton').addEventListener('click', async () => {
+      const wallet = xrpl.Wallet.generate()
+      printLog(`Account address: ${wallet.address}<br />Secret key     : ${wallet.seed}`)
+    })
+
+    // AccountInfo
+    async function getAccountInfo(address) {
+      try {
+        const response = await client.request({
+          command: 'account_info',
+          account: address,
+          ledger_index: 'validated'
+        })
+        printLog(JSON.stringify(response.result))
+      } catch (error) {
+        printLog(`AccountInfo error: ${error.message}`)
+      }
+    }
+
+    const AccountInfoInput = document.getElementById('AccountInfo')
+    AccountInfoInput.addEventListener('input', function () {
+      const address = this.value
+      if (address != '') {
+        getAccountInfo(address)
+      }
+    })
+
+    // Payment
     document.getElementById('PayButton').addEventListener('click', async () => {
       try {
         let payAmount = parseFloat(document.getElementById('PayAmount').value)
@@ -271,34 +303,6 @@
         printLog(`Transaction error: ${error.message}`)
       }
     })
-
-    async function getAccountInfo(address) {
-      try {
-        const response = await client.request({
-          command: 'account_info',
-          account: address,
-          ledger_index: 'validated'
-        })
-        printLog(JSON.stringify(response.result))
-      } catch (error) {
-        printLog(`AccountInfo error: ${error.message}`)
-      }
-    }
-
-    async function getAccountBalance(address) {
-      try {
-        const response = await client.request({
-          command: 'account_info',
-          account: address,
-          ledger_index: 'validated'
-        })
-        const balance = response.result.account_data.Balance
-        printLog(`${linkAddress(address)} balance: ${xrpl.dropsToXrp(balance)} XRP`)
-        return balance
-      } catch (error) {
-        printLog(`AccountInfo error: ${error.message}`)
-      }
-    }
 
     async function payXRP(destination, amount) {
       try {
@@ -341,7 +345,7 @@
     GetAccountAddressInput.addEventListener('input', function () {
       const address = this.value
       if (address != '') {
-        getAccountInfo(address)
+        getAccountBalance(address)
       }
     })
 
@@ -363,6 +367,7 @@
       }
     })
 
+    // DeleteAccount
     const DelAccountSeedInput = document.getElementById('DelAccountSeed')
     DelAccountSeedInput.addEventListener('input', function () {
       const seed = this.value
