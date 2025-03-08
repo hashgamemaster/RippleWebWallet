@@ -25,10 +25,10 @@
 </head>
 
 <body>
-  <label for="Donate" style="font-weight: bold;">Donate: rGAME18vAXhnJaDhHREWBAi77iAzQmxPkG</label>
+  <div style="font-weight: bold;">Donate: rGAME18vAXhnJaDhHREWBAi77iAzQmxPkG</div>
   <hr />
 
-  <label for="Server">Server:</label>
+  <label for="ServerURL">Server:</label>
   <select id="ServerURL">
     <option value="wss://xrplcluster.com">MainNetCluster</option>
     <option value="wss://s1.ripple.com">MainNet s1</option>
@@ -37,13 +37,14 @@
   </select>
   <button id="ConnectServer">Connect</button>
   <br />
-  <label for="Action">Action:</label>
+  <label for="ActionSelector">Action:</label>
   <select id="ActionSelector">
     <option value="" selected>Please select action...</option>
     <option value="ActionGenAccount">GenAccount</option>
     <option value="ActionAccountInfo">Account Info</option>
     <option value="ActionPayment">Payment</option>
     <option value="ActionAccountDel">Delete Account</option>
+    <option value="ActionSetMultiSign">Set MultiSign</option>
   </select>
   <br />
 
@@ -98,6 +99,21 @@
     <button id="DelButton" disabled>!!!Delete</button>
   </div>
 
+  <div id="ActionSetMultiSign" class="hidden">
+    <label for="MasterAccountSeed">Master Account Seed:</label>
+    <input type="text" id="MasterAccountSeed" placeholder="s........" size="50" disabled>
+    <br />
+    <label for="MasterAccountAddress">Master Account Address:</label>
+    <input type="text" id="MasterAccountAddress" placeholder="r........" size="50" disabled>
+    <br />
+    <label for="SignerAccounts">Signer Accounts:</label>
+    <input type="text" id="SignerAccounts" placeholder="r........,r........,r........" size="150" disabled>
+    <br />
+    <label for="Threshold">Threshold:</label>
+    <input type="number" id="Threshold" placeholder="" disabled>
+    <br />
+    <button id="SetMultiSignButton" disabled>Set</button>
+  </div>
 
   <br />
   <button id="CleanLog">Clean Log</button>
@@ -108,12 +124,14 @@
     let client = null
     let payWallet = null
     let delWallet = null
+    let mastetWallet = null
 
     let ActionDivs = [
       document.getElementById('ActionGenAccount'),
       document.getElementById('ActionAccountInfo'),
       document.getElementById('ActionPayment'),
       document.getElementById('ActionAccountDel'),
+      document.getElementById('ActionSetMultiSign'),
     ]
 
     let ActionSelector = document.getElementById('ActionSelector')
@@ -200,6 +218,12 @@
           document.getElementById('DelSourceTag').disabled = false
           document.getElementById('DelDestinationTag').disabled = false
           document.getElementById('DelButton').disabled = false
+
+          document.getElementById('MasterAccountSeed').disabled = false
+          document.getElementById('SignerAccounts').disabled = false
+          document.getElementById('Threshold').disabled = false
+          document.getElementById('SetMultiSignButton').disabled = false
+
         })
 
         client.on('disconnected', () => {
@@ -221,6 +245,11 @@
           document.getElementById('DelSourceTag').disabled = true
           document.getElementById('DelDestinationTag').disabled = true
           document.getElementById('DelButton').disabled = true
+
+          document.getElementById('MasterAccountSeed').disabled = true
+          document.getElementById('SignerAccounts').disabled = true
+          document.getElementById('Threshold').disabled = true
+          document.getElementById('SetMultiSignButton').disabled = true
         })
 
         client.on("close", () => {
@@ -432,6 +461,70 @@
         }
         printLog('Transaction result: ' + JSON.stringify(response))
         document.getElementById('DelButton').disabled = false
+      } catch (error) {
+        printLog(`Transaction error: ${error.message}`)
+      }
+    })
+
+    // Set MultiSign
+    const MasterAccountSeedInput = document.getElementById('MasterAccountSeed')
+    MasterAccountSeedInput.addEventListener('input', function () {
+      const seed = this.value
+      try {
+        masterWallet = xrpl.Wallet.fromSeed(seed)
+        if (seed != '' && masterWallet.address != '') {
+          getAccountBalance(masterWallet.address)
+          document.getElementById('MasterAccountAddress').value = masterWallet.address
+        } else {
+          document.getElementById('MasterAccountAddress').value = ''
+        }
+      } catch (error) {
+        printLog(error.message)
+        payWallet = null
+        document.getElementById('MasterAccountAddress').value = ''
+      }
+    })
+
+    document.getElementById('SetMultiSignButton').addEventListener('click', async () => {
+      try {
+        let signerAccounts = document.getElementById('SignerAccounts').value
+        signerAccounts = signerAccounts.split(',')
+        let signers = signerAccounts.map(signer => (
+          {
+            'account': signer,
+            'weight': 1
+          }
+        ))
+        let threshold = parseInt(document.getElementById('Threshold').value)
+
+        if (masterWallet == null) {
+          printLog(`MasterAccount is null...`)
+          return
+        }
+
+        document.getElementById('SetMultiSignButton').disabled = true
+
+        const transaction = {
+          TransactionType: 'SignerListSet',
+          Account: masterWallet.address,
+          "SignerQuorum": threshold,
+          "SignerEntries": signers.map(signer => ({
+            SignerEntry: {
+              Account: signer.account,
+              SignerWeight: signer.weight
+            }
+          })),
+        }
+        const prepared = await client.autofill(transaction)
+        const signed = masterWallet.sign(prepared)
+        const response = await client.submitAndWait(signed.tx_blob)
+        if (response.result.validated == true && response.result.meta.TransactionResult == 'tesSUCCESS') {
+          printLog(`SetMultiSign (${linkTx(response.result.hash)}) success`)
+        } else {
+          printLog(`SetMultiSign may failed(${response.result.meta.TransactionResult}), please check manually...`)
+        }
+        printLog('Transaction result: ' + JSON.stringify(response))
+        document.getElementById('SetMultiSignButton').disabled = false
       } catch (error) {
         printLog(`Transaction error: ${error.message}`)
       }
