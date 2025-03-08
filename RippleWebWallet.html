@@ -45,6 +45,7 @@
     <option value="ActionPayment">Payment</option>
     <option value="ActionAccountDel">Delete Account</option>
     <option value="ActionSetMultiSign">Set MultiSign</option>
+    <option value="ActionDelMultiSign">Del MultiSign</option>
   </select>
   <br />
 
@@ -115,6 +116,16 @@
     <button id="SetMultiSignButton" disabled>Set</button>
   </div>
 
+  <div id="ActionDelMultiSign" class="hidden">
+    <label for="DelMasterAccountSeed">Master Account Seed:</label>
+    <input type="text" id="DelMasterAccountSeed" placeholder="s........" size="50" disabled>
+    <br />
+    <label for="DelMasterAccountAddress">Master Account Address:</label>
+    <input type="text" id="DelMasterAccountAddress" placeholder="r........" size="50" disabled>
+    <br />
+    <button id="DelMultiSignButton" disabled>Del</button>
+  </div>
+
   <br />
   <button id="CleanLog">Clean Log</button>
   <div id="LogDiv"></div>
@@ -132,6 +143,7 @@
       document.getElementById('ActionPayment'),
       document.getElementById('ActionAccountDel'),
       document.getElementById('ActionSetMultiSign'),
+      document.getElementById('ActionDelMultiSign'),
     ]
 
     let ActionSelector = document.getElementById('ActionSelector')
@@ -224,6 +236,8 @@
           document.getElementById('Threshold').disabled = false
           document.getElementById('SetMultiSignButton').disabled = false
 
+          document.getElementById('DelMasterAccountSeed').disabled = false
+          document.getElementById('DelMultiSignButton').disabled = false
         })
 
         client.on('disconnected', () => {
@@ -250,6 +264,9 @@
           document.getElementById('SignerAccounts').disabled = true
           document.getElementById('Threshold').disabled = true
           document.getElementById('SetMultiSignButton').disabled = true
+
+          document.getElementById('DelMasterAccountSeed').disabled = true
+          document.getElementById('DelMultiSignButton').disabled = true
         })
 
         client.on("close", () => {
@@ -525,6 +542,55 @@
         }
         printLog('Transaction result: ' + JSON.stringify(response))
         document.getElementById('SetMultiSignButton').disabled = false
+      } catch (error) {
+        printLog(`Transaction error: ${error.message}`)
+      }
+    })
+
+    // Del MultiSign
+    const DelMasterAccountSeedInput = document.getElementById('DelMasterAccountSeed')
+    DelMasterAccountSeedInput.addEventListener('input', function () {
+      const seed = this.value
+      try {
+        masterWallet = xrpl.Wallet.fromSeed(seed)
+        if (seed != '' && masterWallet.address != '') {
+          getAccountBalance(masterWallet.address)
+          document.getElementById('DelMasterAccountAddress').value = masterWallet.address
+        } else {
+          document.getElementById('DelMasterAccountAddress').value = ''
+        }
+      } catch (error) {
+        printLog(error.message)
+        payWallet = null
+        document.getElementById('DelMasterAccountAddress').value = ''
+      }
+    })
+
+    document.getElementById('DelMultiSignButton').addEventListener('click', async () => {
+      try {
+        if (masterWallet == null) {
+          printLog(`MasterAccount is null...`)
+          return
+        }
+
+        document.getElementById('DelMultiSignButton').disabled = true
+
+        const transaction = {
+          TransactionType: 'SignerListSet',
+          Account: masterWallet.address,
+          "SignerQuorum": 0,
+          "SignerEntries": [],
+        }
+        const prepared = await client.autofill(transaction)
+        const signed = masterWallet.sign(prepared)
+        const response = await client.submitAndWait(signed.tx_blob)
+        if (response.result.validated == true && response.result.meta.TransactionResult == 'tesSUCCESS') {
+          printLog(`DelMultiSign (${linkTx(response.result.hash)}) success`)
+        } else {
+          printLog(`DelMultiSign may failed(${response.result.meta.TransactionResult}), please check manually...`)
+        }
+        printLog('Transaction result: ' + JSON.stringify(response))
+        document.getElementById('DelMultiSignButton').disabled = false
       } catch (error) {
         printLog(`Transaction error: ${error.message}`)
       }
