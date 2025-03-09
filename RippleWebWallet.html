@@ -46,6 +46,7 @@
     <option value="ActionAccountDel">Delete Account</option>
     <option value="ActionSetMultiSign">Set MultiSign</option>
     <option value="ActionDelMultiSign">Del MultiSign</option>
+    <option value="ActionMultiSignPayment">MultiSign Payment</option>
   </select>
   <br />
 
@@ -126,6 +127,28 @@
     <button id="DelMultiSignButton" disabled>Del</button>
   </div>
 
+  <div id="ActionMultiSignPayment" class="hidden">
+    <label for="SignerAccountSeeds">Signer Account Seed:</label>
+    <input type="text" id="SignerAccountSeeds" placeholder="s........,s........,s........" size="50" disabled>
+    <br />
+    <label for="MSPayAccountAddress">Pay Account Address:</label>
+    <input type="text" id="MSPayAccountAddress" placeholder="r........" size="50" disabled>
+    <br />
+    <label for="MSGetAccountAddress">Get Account Address:</label>
+    <input type="text" id="MSGetAccountAddress" placeholder="r........" size="50" disabled>
+    <br />
+    <label for="MSPayAmount">Pay Amount:</label>
+    <input type="number" id="MSPayAmount" placeholder="100..." disabled>
+    <br />
+    <label for="MSSourceTag">SourceTag:</label>
+    <input type="number" id="MSSourceTag" placeholder="" disabled>
+    <br />
+    <label for="MSDestinationTag">DestinationTag:</label>
+    <input type="number" id="MSDestinationTag" placeholder="" disabled>
+    <br />
+    <button id="MSPayButton" disabled>Gen MultiSign Payment Tx json</button>
+  </div>
+
   <br />
   <button id="CleanLog">Clean Log</button>
   <div id="LogDiv"></div>
@@ -136,6 +159,7 @@
     let payWallet = null
     let delWallet = null
     let mastetWallet = null
+    let signerList = []
 
     let ActionDivs = [
       document.getElementById('ActionGenAccount'),
@@ -144,6 +168,7 @@
       document.getElementById('ActionAccountDel'),
       document.getElementById('ActionSetMultiSign'),
       document.getElementById('ActionDelMultiSign'),
+      document.getElementById('ActionMultiSignPayment'),
     ]
 
     let ActionSelector = document.getElementById('ActionSelector')
@@ -238,6 +263,14 @@
 
           document.getElementById('DelMasterAccountSeed').disabled = false
           document.getElementById('DelMultiSignButton').disabled = false
+
+          document.getElementById('SignerAccountSeeds').disabled = false
+          document.getElementById('MSPayAccountAddress').disabled = false
+          document.getElementById('MSGetAccountAddress').disabled = false
+          document.getElementById('MSPayAmount').disabled = false
+          document.getElementById('MSSourceTag').disabled = false
+          document.getElementById('MSDestinationTag').disabled = false
+          document.getElementById('MSPayButton').disabled = false
         })
 
         client.on('disconnected', () => {
@@ -267,6 +300,14 @@
 
           document.getElementById('DelMasterAccountSeed').disabled = true
           document.getElementById('DelMultiSignButton').disabled = true
+
+          document.getElementById('SignerAccountSeeds').disabled = true
+          document.getElementById('MSPayAccountAddress').disabled = true
+          document.getElementById('MSGetAccountAddress').disabled = true
+          document.getElementById('MSPayAmount').disabled = true
+          document.getElementById('MSSourceTag').disabled = true
+          document.getElementById('MSDestinationTag').disabled = true
+          document.getElementById('MSPayButton').disabled = true
         })
 
         client.on("close", () => {
@@ -593,6 +634,121 @@
         document.getElementById('DelMultiSignButton').disabled = false
       } catch (error) {
         printLog(`Transaction error: ${error.message}`)
+      }
+    })
+
+    // MultiSign Payment
+    document.getElementById('MSPayButton').addEventListener('click', async () => {
+      try {
+        let payAmount = parseFloat(document.getElementById('MSPayAmount').value)
+        document.getElementById('MSPayAmount').value = 0
+
+        let payAccountAddress = document.getElementById('MSPayAccountAddress').value
+        let getAccountAddress = document.getElementById('MSGetAccountAddress').value
+
+        if (payAccountAddress == null || payAccountAddress == '') {
+          printLog(`PayAccount is null...`)
+          return
+        }
+        if (getAccountAddress == null || getAccountAddress == '') {
+          printLog(`GetAccount is null...`)
+          return
+        }
+        if (payAmount <= 0) {
+          printLog(`PayAmount should larger than 0...`)
+          return
+        }
+
+        await multisignPayXRP(getAccountAddress, payAmount)
+      } catch (error) {
+        printLog(`Transaction error: ${error.message}`)
+      }
+    })
+
+    async function multisignPayXRP(destination, amount) {
+      try {
+        document.getElementById('MSPayButton').disabled = true
+        let payAddress = document.getElementById('MSPayAccountAddress').value
+        let source_tag = parseInt(document.getElementById('MSSourceTag').value)
+        let destination_tag = parseInt(document.getElementById('MSDestinationTag').value)
+
+        const transaction = {
+          TransactionType: 'Payment',
+          Account: payAddress,
+          Destination: destination,
+          Fee: '12',
+          Amount: xrpl.xrpToDrops(amount)
+        }
+        if (source_tag != NaN) {
+          transaction.SourceTag = source_tag
+        }
+        if (destination_tag != NaN) {
+          transaction.DestinationTag = destination_tag
+        }
+        const prepared = await client.autofill(transaction)
+        delete prepared.SigningPubKey
+        delete prepared.TxnSignature
+        let signers = []
+        for (const signer of signerList) {
+          const partialSignedTransaction = signer.sign(prepared, { multisign: true })
+          const signerEntry = {
+            Signer: {
+              Account: signer.address,
+              TxnSignature: partialSignedTransaction.tx_blob.slice(-192),
+              SigningPubKey: signer.publicKey
+            }
+          }
+          signers.push(signerEntry)
+        }
+        prepared.Signers = signers
+        printLog(JSON.stringify(prepared))
+        // !!! Transaction error: xrpl.convertTransactionToBlob is not a function
+        // const response = await client.submitAndWait(xrpl.convertTransactionToBlob(prepared))
+        // if (response.result.validated == true && response.result.meta.TransactionResult == 'tesSUCCESS') {
+        //   printLog(`MultiSign Paymet(${linkTx(response.result.hash)}) success`)
+        //   printLog(`${linkAddress(response.result.Account)} deliver amount(${xrpl.dropsToXrp(response.result.Amount)} XRP) to ${linkAddress(response.result.Destination)} cost fee(${xrpl.dropsToXrp(response.result.Fee)} XRP)`)
+        // } else {
+        //   printLog(`MultiSign Paymet(${linkTx(response.result.hash)
+        //     }) may failed(${response.result.meta.TransactionResult}), please check manually...`)
+        // }
+        // printLog('Transaction result: ' + JSON.stringify(response))
+        document.getElementById('MSPayButton').disabled = false
+        return response
+      } catch (error) {
+        throw error
+      }
+    }
+
+    const MSPayAccountAddressInput = document.getElementById('MSPayAccountAddress')
+    MSPayAccountAddressInput.addEventListener('input', function () {
+      const address = this.value
+      if (address != '') {
+        getAccountBalance(address)
+      }
+    })
+
+    const MSGetAccountAddressInput = document.getElementById('MSGetAccountAddress')
+    MSGetAccountAddressInput.addEventListener('input', function () {
+      const address = this.value
+      if (address != '') {
+        getAccountBalance(address)
+      }
+    })
+
+    const SignerAccountSeedsInput = document.getElementById('SignerAccountSeeds')
+    SignerAccountSeedsInput.addEventListener('input', function () {
+      let signerSeeds = this.value.split(',')
+      signerList = []
+      try {
+        for (let i = 0; i < signerSeeds.length; i++) {
+          const seed = signerSeeds[i]
+          const signerWallet = xrpl.Wallet.fromSeed(seed)
+          signerList.push(signerWallet)
+          printLog(`Signer #${i + 1}:` + signerWallet.address)
+        }
+      } catch (error) {
+        printLog(error.message)
+        signerList = []
       }
     })
   </script>
