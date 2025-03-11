@@ -47,6 +47,9 @@
     <option value="ActionSetMultiSign">Set MultiSign</option>
     <option value="ActionDelMultiSign">Del MultiSign</option>
     <option value="ActionMultiSignPayment">MultiSign Payment</option>
+    <option value="ActionSetRegularKey">Set RegularKey</option>
+    <option value="ActionDelRegularKey">Del RegularKey</option>
+    <option value="ActionDisableMasterKey">Disable MasterKey</option>
   </select>
   <br />
 
@@ -149,6 +152,39 @@
     <button id="MSPayButton" disabled>Gen MultiSign Payment Tx json</button>
   </div>
 
+  <div id="ActionSetRegularKey" class="hidden">
+    <label for="SRKMasterSeed">Master Account Seed:</label>
+    <input type="text" id="SRKMasterSeed" placeholder="s........" size="50" disabled>
+    <br />
+    <label for="SRKMasterAccount">Master Account Address:</label>
+    <input type="text" id="SRKMasterAccount" placeholder="r........" size="50" disabled>
+    <br />
+    <label for="RegularKey">RegularKey Account Address:</label>
+    <input type="text" id="RegularKey" placeholder="r........" size="50" disabled>
+    <br />
+    <button id="SetRegularKeyButton" disabled>Set</button>
+  </div>
+
+  <div id="ActionDelRegularKey" class="hidden">
+    <label for="DRKMasterSeed">Master Account Seed:</label>
+    <input type="text" id="DRKMasterSeed" placeholder="s........" size="50" disabled>
+    <br />
+    <label for="DRKMasterAccount">Master Account Address:</label>
+    <input type="text" id="DRKMasterAccount" placeholder="r........" size="50" disabled>
+    <br />
+    <button id="DelRegularKeyButton" disabled>Del</button>
+  </div>
+
+  <div id="ActionDisableMasterKey" class="hidden">
+    <label for="DisMasterSeed">Master Account Seed:</label>
+    <input type="text" id="DisMasterSeed" placeholder="s........" size="50" disabled>
+    <br />
+    <label for="DisMasterAccount">Master Account Address:</label>
+    <input type="text" id="DisMasterAccount" placeholder="r........" size="50" disabled>
+    <br />
+    <button id="DisableMasterButton" disabled>!!!Disable</button>
+  </div>
+
   <br />
   <button id="CleanLog">Clean Log</button>
   <div id="LogDiv"></div>
@@ -160,6 +196,9 @@
     let delWallet = null
     let mastetWallet = null
     let signerList = []
+    let srkWallet = null
+    let drkWallet = null
+    let disWallet = null
 
     let ActionDivs = [
       document.getElementById('ActionGenAccount'),
@@ -169,6 +208,9 @@
       document.getElementById('ActionSetMultiSign'),
       document.getElementById('ActionDelMultiSign'),
       document.getElementById('ActionMultiSignPayment'),
+      document.getElementById('ActionSetRegularKey'),
+      document.getElementById('ActionDelRegularKey'),
+      document.getElementById('ActionDisableMasterKey')
     ]
 
     let ActionSelector = document.getElementById('ActionSelector')
@@ -271,6 +313,16 @@
           document.getElementById('MSSourceTag').disabled = false
           document.getElementById('MSDestinationTag').disabled = false
           document.getElementById('MSPayButton').disabled = false
+
+          document.getElementById('SRKMasterSeed').disabled = false
+          document.getElementById('RegularKey').disabled = false
+          document.getElementById('SetRegularKeyButton').disabled = false
+
+          document.getElementById('DRKMasterSeed').disabled = false
+          document.getElementById('DelRegularKeyButton').disabled = false
+
+          document.getElementById('DisMasterSeed').disabled = false
+          document.getElementById('DisableMasterButton').disabled = false
         })
 
         client.on('disconnected', () => {
@@ -308,6 +360,16 @@
           document.getElementById('MSSourceTag').disabled = true
           document.getElementById('MSDestinationTag').disabled = true
           document.getElementById('MSPayButton').disabled = true
+
+          document.getElementById('SRKMasterSeed').disabled = true
+          document.getElementById('RegularKey').disabled = true
+          document.getElementById('SetRegularKeyButton').disabled = true
+
+          document.getElementById('DRKMasterSeed').disabled = true
+          document.getElementById('DelRegularKeyButton').disabled = true
+
+          document.getElementById('DisMasterSeed').disabled = true
+          document.getElementById('DisableMasterButton').disabled = true
         })
 
         client.on("close", () => {
@@ -749,6 +811,167 @@
       } catch (error) {
         printLog(error.message)
         signerList = []
+      }
+    })
+
+    // Set RegularKey
+    const SRKMasterSeedInput = document.getElementById('SRKMasterSeed')
+    SRKMasterSeedInput.addEventListener('input', function () {
+      const seed = this.value
+      try {
+        srkWallet = xrpl.Wallet.fromSeed(seed)
+        if (seed != '' && srkWallet.address != '') {
+          getAccountBalance(srkWallet.address)
+          document.getElementById('SRKMasterAccount').value = srkWallet.address
+        } else {
+          document.getElementById('SRKMasterAccount').value = ''
+        }
+      } catch (error) {
+        printLog(error.message)
+        srkWallet = null
+        document.getElementById('SRKMasterAccount').value = ''
+      }
+    })
+
+    const RegularKeyInput = document.getElementById('RegularKey')
+    RegularKeyInput.addEventListener('input', function () {
+      const address = this.value
+      if (address != '') {
+        getAccountBalance(address)
+      }
+    })
+
+    document.getElementById('SetRegularKeyButton').addEventListener('click', async () => {
+      try {
+        let regularKeyAccount = document.getElementById('RegularKey').value
+
+        if (srkWallet == null) {
+          printLog(`master wallet is null...`)
+          return
+        }
+        if (regularKeyAccount == null || regularKeyAccount == '') {
+          printLog(`RegularKey Account is null...`)
+          return
+        }
+
+        document.getElementById('SetRegularKeyButton').disabled = true
+
+        const transaction = {
+          TransactionType: 'SetRegularKey',
+          Account: srkWallet.address,
+          RegularKey: regularKeyAccount
+        }
+
+        const prepared = await client.autofill(transaction)
+        const signed = srkWallet.sign(prepared)
+        const response = await client.submitAndWait(signed.tx_blob)
+        if (response.result.validated == true && response.result.meta.TransactionResult == 'tesSUCCESS') {
+          printLog(`Set Regular Account(${linkTx(response.result.hash)}) success`)
+        } else {
+          printLog(`Set Regular Account(${response.result.meta.TransactionResult}), please check manually...`)
+        }
+        printLog('Transaction result: ' + JSON.stringify(response))
+        document.getElementById('SetRegularKeyButton').disabled = false
+      } catch (error) {
+        printLog(`Transaction error: ${error.message}`)
+      }
+    })
+
+    // Del RegularKey
+    const DRKMasterSeedInput = document.getElementById('DRKMasterSeed')
+    DRKMasterSeedInput.addEventListener('input', function () {
+      const seed = this.value
+      try {
+        drkWallet = xrpl.Wallet.fromSeed(seed)
+        if (seed != '' && drkWallet.address != '') {
+          getAccountBalance(drkWallet.address)
+          document.getElementById('DRKMasterAccount').value = drkWallet.address
+        } else {
+          document.getElementById('DRKMasterAccount').value = ''
+        }
+      } catch (error) {
+        printLog(error.message)
+        drkWallet = null
+        document.getElementById('DRKMasterAccount').value = ''
+      }
+    })
+
+    document.getElementById('DelRegularKeyButton').addEventListener('click', async () => {
+      try {
+        if (drkWallet == null) {
+          printLog(`master wallet is null...`)
+          return
+        }
+
+        document.getElementById('DelRegularKeyButton').disabled = true
+
+        const transaction = {
+          TransactionType: 'SetRegularKey',
+          Account: drkWallet.address,
+          RegularKey: ""
+        }
+
+        const prepared = await client.autofill(transaction)
+        const signed = drkWallet.sign(prepared)
+        const response = await client.submitAndWait(signed.tx_blob)
+        if (response.result.validated == true && response.result.meta.TransactionResult == 'tesSUCCESS') {
+          printLog(`Del Regular Account(${linkTx(response.result.hash)}) success`)
+        } else {
+          printLog(`Del Regular Account(${response.result.meta.TransactionResult}), please check manually...`)
+        }
+        printLog('Transaction result: ' + JSON.stringify(response))
+        document.getElementById('DelRegularKeyButton').disabled = false
+      } catch (error) {
+        printLog(`Transaction error: ${error.message}`)
+      }
+    })
+
+    // Disable MasterKey
+    const DisMasterSeedInput = document.getElementById('DisMasterSeed')
+    DisMasterSeedInput.addEventListener('input', function () {
+      const seed = this.value
+      try {
+        disWallet = xrpl.Wallet.fromSeed(seed)
+        if (seed != '' && disWallet.address != '') {
+          getAccountBalance(disWallet.address)
+          document.getElementById('DRKMasterAccount').value = disWallet.address
+        } else {
+          document.getElementById('DRKMasterAccount').value = ''
+        }
+      } catch (error) {
+        printLog(error.message)
+        disWallet = null
+        document.getElementById('DRKMasterAccount').value = ''
+      }
+    })
+
+    document.getElementById('DisableMasterButton').addEventListener('click', async () => {
+      try {
+        if (disWallet == null) {
+          printLog(`master wallet is null...`)
+          return
+        }
+
+        document.getElementById('DisableMasterButton').disabled = true
+
+        const transaction = {
+          TransactionType: 'AccountSet',
+          Account: disWallet.address,
+          "SetFlag": 2
+        }
+
+        const prepared = await client.autofill(transaction)
+        const signed = disWallet.sign(prepared)
+        const response = await client.submitAndWait(signed.tx_blob)
+        if (response.result.validated == true && response.result.meta.TransactionResult == 'tesSUCCESS') {
+          printLog(`Disable MasterKey Account(${linkTx(response.result.hash)}) success`)
+        } else {
+          printLog(`Disable MasterKey Account(${response.result.meta.TransactionResult}), please check manually...`)
+        }
+        printLog('Transaction result: ' + JSON.stringify(response))
+        document.getElementById('DisableMasterButton').disabled = false
+      } catch (error) {
+        printLog(`Transaction error: ${error.message}`)
       }
     })
   </script>
